@@ -38,7 +38,7 @@ export class AuthService {
 
     async loginWithGoogle() {
         try {
-            return  this.account.createOAuth2Session("google",
+            return  this.account.createOAuth2Token("google",
                 `${window.location.origin}/`);
         } catch (error) {
             throw error;
@@ -47,7 +47,7 @@ export class AuthService {
 
     async loginWithGithub() {   
         try {
-            return this.account.createOAuth2Session("github",
+            return this.account.createOAuth2Token("github",
                 `${window.location.origin}/`);
         } catch (error) {
             throw error;
