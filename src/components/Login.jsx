@@ -99,7 +99,7 @@ const handleGithubLogin = async () => {
                 type="submit"
                 className="w-full"
                 >Sign in</Button>
-                <Button onClick={handleGooglelogin} className='w-full'
+                <Button onClick={handleGoogleLogin} className='w-full'
                 >login with google</Button>
                 <Button onClick={handleGithubLogin} className='w-full'
                 >login with github</Button>
