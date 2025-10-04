@@ -26,23 +26,31 @@ function Login() {
         }
     }
 
-    const handleGooglelogin = async() => {
-        setError("")
-        try {
-            await authService.loginWithGoogle()
-        } catch (error) {
-            setError(error.message)
-        }
+   const handleGoogleLogin = async () => {
+    try {
+        const token = await authService.loginWithGoogle();
+        // You can handle the token manually if needed
+        console.log('OAuth token:', token);
+        
+        // The user should now be authenticated
+        const user = await authService.getCurrentUser();
+        console.log('User:', user);
+        
+    } catch (error) {
+        console.error('Google login failed:', error);
     }
-    
-    const handleGithubLogin = async() => {
-        setError("")   
-        try {
-            await authService.loginWithGithub()
-        } catch (error) {
-            setError(error.message)
-        }
+};
+
+const handleGithubLogin = async () => {
+    try {
+        const token = await authService.loginWithGithub();
+        // Handle token or proceed with your app logic
+        console.log('OAuth token:', token);
+        
+    } catch (error) {
+        console.error('GitHub login failed:', error);
     }
+};
 
   return (
     <div
