@@ -1,6 +1,7 @@
-import conf from '../conf/conf.js';
-import { Client, Account, ID } from "appwrite";
+// src/appwrite/auth.js
 
+import conf from '../conf/conf.js';
+import { Client, Account } from "appwrite";
 
 export class AuthService {
     client = new Client();
@@ -11,70 +12,38 @@ export class AuthService {
             .setEndpoint(conf.appwriteUrl)
             .setProject(conf.appwriteProjectId);
         this.account = new Account(this.client);
-            
     }
 
-    async createAccount({email, password, name}) {
+    /**
+     * This is the ONLY login method you need.
+     * It takes a token from Clerk to create an Appwrite session.
+     */
+    async loginWithClerkJwt(jwt) {
         try {
-            const userAccount = await this.account.create(ID.unique(), email, password, name);
-            if (userAccount) {
-                // call another method
-                return this.login({email, password});
-            } else {
-               return  userAccount;
-            }
+            return await this.account.createJWT(jwt);
         } catch (error) {
-            throw error;
+            console.error("Appwrite login with JWT failed:", error);
+            return null;
         }
-    }
-
-    async login({email, password}) {
-        try {
-            return await this.account.createEmailPasswordSession(email, password);
-        } catch (error) {
-            throw error;
-        }
-    }
-
-    async loginWithGoogle() {
-        try {
-            return  this.account.createOAuth2Token("google",
-                `${window.location.origin}/`);
-        } catch (error) {
-            throw error;
-        }
-    }
-
-    async loginWithGithub() {   
-        try {
-            return this.account.createOAuth2Token("github",
-                `${window.location.origin}/`);
-        } catch (error) {
-            throw error;
-        }   
     }
 
     async getCurrentUser() {
         try {
             return await this.account.get();
         } catch (error) {
-            console.log("Appwrite serive :: getCurrentUser :: error", error);
+            return null; // It's normal for this to fail if there's no session
         }
-
-        return null;
     }
 
     async logout() {
-
         try {
             await this.account.deleteSessions();
         } catch (error) {
-            console.log("Appwrite serive :: logout :: error", error);
+            console.error("Appwrite logout failed:", error);
         }
     }
 }
 
 const authService = new AuthService();
 
-export default authService
-
+export default authService;

@@ -1,18 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useUser } from '@clerk/clerk-react'; // 1. Import Clerk's hook
 import appwriteService from "../appwrite/config";
 import { Button, Container } from "../components";
 import parse from "html-react-parser";
-import { useSelector } from "react-redux";
+// 2. The 'useSelector' import has been removed
 
 export default function Post() {
     const [post, setPost] = useState(null);
     const { slug } = useParams();
     const navigate = useNavigate();
 
-    const userData = useSelector((state) => state.auth.userData);
+    // 3. Get the user's status and data directly from Clerk
+    const { isSignedIn, user } = useUser();
 
-    const isAuthor = post && userData ? post.userId === userData.$id : false;
+    // 4. Update the isAuthor check to use Clerk's user object
+    // Note: Clerk's user ID is `user.id`, whereas Appwrite's was `userData.$id`
+    const isAuthor = isSignedIn && post && user ? post.userId === user.id : false;
 
     useEffect(() => {
         if (slug) {
@@ -32,6 +36,7 @@ export default function Post() {
         });
     };
 
+    // The JSX part below remains the same as it correctly uses the 'isAuthor' boolean
     return post ? (
         <div className="py-8">
             <Container>

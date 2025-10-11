@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { Button, Input, RTE, Select } from "..";
 import appwriteService from "../../appwrite/config";
 import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useUser } from "@clerk/clerk-react"; // 1. Import Clerk's hook
 
 export default function PostForm({ post }) {
   const {
@@ -13,42 +13,27 @@ export default function PostForm({ post }) {
     setValue,
     control,
     getValues,
-    reset,
     formState: { errors, isSubmitting },
   } = useForm({
     defaultValues: {
-      title: "",
-      slug: "",
-      content: "",
-      status: "active",
-      // image field not set in defaultValues because file inputs are special
+      title: post?.title || "",
+      slug: post?.$id || "",
+      content: post?.content || "",
+      status: post?.status || "active",
     },
   });
 
   const navigate = useNavigate();
-  const userData = useSelector((state) => state.auth.userData);
-
-  // Reset form when post changes (for update case)
-  useEffect(() => {
-    if (post) {
-      reset({
-        title: post.title || "",
-        slug: post.$id || "",
-        content: post.content || "",
-        status: post.status || "active",
-      });
-    }
-  }, [post, reset]);
+  const { user } = useUser(); // 2. Get user data directly from Clerk
 
   // Slug transform helper
   const slugTransform = useCallback((value) => {
-    if (value && typeof value === "string") {
+    if (value && typeof value === "string")
       return value
         .trim()
         .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")            // non-alphanumeric → hyphen
-        .replace(/^-+|-+$/g, "");               // trim hyphens at start/end
-    }
+        .replace(/[^a-z0-9\s-]/g, "") // remove non-alphanumeric characters except spaces and hyphens
+        .replace(/\s+/g, "-"); // replace spaces with -
     return "";
   }, []);
 
@@ -56,98 +41,84 @@ export default function PostForm({ post }) {
   useEffect(() => {
     const subscription = watch((value, { name }) => {
       if (name === "title") {
-        const newSlug = slugTransform(value.title || "");
-        setValue("slug", newSlug, { shouldValidate: true });
+        setValue("slug", slugTransform(value.title), { shouldValidate: true });
       }
     });
+
     return () => subscription.unsubscribe();
   }, [watch, slugTransform, setValue]);
 
   // Form submission handler
- const onSubmit = async (data) => {
-  if (!userData) {
-    console.error("No user data found. Please login first.");
-    return;
-  }
-
-  try {
-    let file;
-    if (data.image && data.image[0]) {
-      file = await appwriteService.uploadFile(data.image[0]);
-    }
-
-    if (file) {
-      data.featuredImage = file.$id;
-    }
-
-    let dbPost;
+  const submit = async (data) => {
     if (post) {
-      // update
-      dbPost = await appwriteService.updatePost(post.$id, {
-        ...data,
-        featuredImage: file ? file.$id : post.featuredImage,
-      });
-    } else {
-      // create
-      dbPost = await appwriteService.createPost({
-        ...data,
-        userId: userData.$id,
-      });
-    }
+      // Logic to UPDATE an existing post
+      const file = data.image[0] ? await appwriteService.uploadFile(data.image[0]) : null;
 
-    if (dbPost && dbPost.$id) {
-      navigate(`/post/${dbPost.$id}`);
+      if (file) {
+        appwriteService.deleteFile(post.featuredImage);
+      }
+
+      const dbPost = await appwriteService.updatePost(post.$id, {
+        ...data,
+        featuredImage: file ? file.$id : undefined,
+      });
+
+      if (dbPost) {
+        navigate(`/post/${dbPost.$id}`);
+      }
     } else {
-      console.error("Post creation/updation failed");
+      // Logic to CREATE a new post
+      if (!user) {
+        console.error("User is not logged in.");
+        return; // Early exit if no user
+      }
+
+      const file = data.image[0] ? await appwriteService.uploadFile(data.image[0]) : null;
+
+      if (file) {
+        const fileId = file.$id;
+        data.featuredImage = fileId;
+        const dbPost = await appwriteService.createPost({
+          ...data,
+          userId: user.id, // 3. Use the user ID from Clerk
+        });
+
+        if (dbPost) {
+          navigate(`/post/${dbPost.$id}`);
+        }
+      }
     }
-  } catch (error) {
-    console.error("Error submitting post:", error);
-  }
-};
+  };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-wrap">
+    <form onSubmit={handleSubmit(submit)} className="flex flex-wrap">
       <div className="w-2/3 px-2">
         <Input
           label="Title :"
           placeholder="Title"
           className="mb-4"
-          {...register("title", { required: "Title is required" })}
+          {...register("title", { required: true })}
         />
-        {errors.title && <span className="text-red-500">{errors.title.message}</span>}
-
         <Input
           label="Slug :"
           placeholder="Slug"
           className="mb-4"
-          {...register("slug", { required: "Slug is required" })}
-          onChange={(e) => {
+          {...register("slug", { required: true })}
+          onInput={(e) => {
             setValue("slug", slugTransform(e.currentTarget.value), { shouldValidate: true });
           }}
         />
-        {errors.slug && <span className="text-red-500">{errors.slug.message}</span>}
-
-        <RTE
-          label="Content :"
-          name="content"
-          control={control}
-          defaultValue={getValues("content")}
-          rules={{ required: "Content is required" }}
-        />
-        {errors.content && <span className="text-red-500">{errors.content.message}</span>}
+        <RTE label="Content :" name="content" control={control} defaultValue={getValues("content")} />
       </div>
-
       <div className="w-1/3 px-2">
         <Input
           label="Featured Image :"
           type="file"
           className="mb-4"
           accept="image/png, image/jpg, image/jpeg, image/gif"
-          {...register("image",  )}
+          {...register("image", { required: !post })}
         />
-        {errors.image && <span className="text-red-500">{errors.image.message}</span>}
-
-        {post && post.featuredImage && (
+        {post && (
           <div className="w-full mb-4">
             <img
               src={appwriteService.getFileView(post.featuredImage)}
@@ -156,17 +127,14 @@ export default function PostForm({ post }) {
             />
           </div>
         )}
-
         <Select
           options={["active", "inactive"]}
           label="Status"
           className="mb-4"
-          {...register("status", { required: "Status is required" })}
+          {...register("status", { required: true })}
         />
-        {errors.status && <span className="text-red-500">{errors.status.message}</span>}
-
         <Button type="submit" bgColor={post ? "bg-green-500" : undefined} className="w-full" disabled={isSubmitting}>
-          {post ? "Update" : "Submit"}
+          {isSubmitting ? "Processing..." : (post ? "Update" : "Submit")}
         </Button>
       </div>
     </form>
